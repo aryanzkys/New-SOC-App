@@ -1,30 +1,124 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../services/supabaseService';
-import { AttendanceRecord, AttendanceStatus } from '../types';
+import { AttendanceRecord, AttendanceStatus, User, OlympiadField, OLYMPIAD_FIELDS, Role } from '../types';
 import { LoadingSpinner } from './LoadingSpinner';
+
+const FIELD_COLORS: { [key in OlympiadField]: string } = {
+    [OlympiadField.Mathematics]: 'bg-red-500',
+    [OlympiadField.Physics]: 'bg-blue-500',
+    [OlympiadField.Chemistry]: 'bg-green-500',
+    [OlympiadField.Biology]: 'bg-teal-500',
+    [OlympiadField.Informatics]: 'bg-purple-500',
+    [OlympiadField.Astronomy]: 'bg-indigo-500',
+    [OlympiadField.Economics]: 'bg-yellow-500',
+    [OlympiadField.EarthScience]: 'bg-orange-500',
+    [OlympiadField.Geography]: 'bg-lime-500',
+};
+
+const FieldBadge: React.FC<{ field: OlympiadField }> = ({ field }) => (
+    <span className={`px-2 py-1 text-xs font-medium text-white rounded-full ${FIELD_COLORS[field]}`}>{field}</span>
+);
+
+const FieldSummary: React.FC<{ users: User[], records: AttendanceRecord[] }> = ({ users, records }) => {
+    const summaryByField = useMemo(() => {
+        const result: { [key in OlympiadField]?: { total: number; present: number } } = {};
+        for(const field of OLYMPIAD_FIELDS) {
+            result[field] = { total: 0, present: 0 };
+        }
+
+        users.forEach(user => {
+            if(user.role === Role.User && user.field && result[user.field]){
+                 result[user.field]!.total++;
+            }
+        });
+
+        records.forEach(record => {
+            if(result[record.field] && (record.status === AttendanceStatus.Hadir || record.status === AttendanceStatus.Pulang)) {
+                result[record.field]!.present++;
+            }
+        });
+        
+        return OLYMPIAD_FIELDS.map(field => ({
+            field,
+            memberCount: result[field]?.total || 0,
+            attendanceRate: records.filter(r => r.field === field).length > 0 ? ((result[field]?.present || 0) / records.filter(r => r.field === field).length) * 100 : 0,
+        }));
+    }, [users, records]);
+
+    const maxMemberCount = Math.max(...summaryByField.map(s => s.memberCount), 1);
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Members per Field */}
+            <div className="bg-gray-50 p-4 rounded-lg border">
+                <h3 className="font-bold text-soc-navy mb-3">Members per Field</h3>
+                <div className="space-y-2">
+                    {summaryByField.map(({ field, memberCount }) => (
+                        <div key={field} className="flex items-center">
+                            <span className="w-28 text-sm text-soc-gray truncate">{field}</span>
+                            <div className="flex-1 bg-gray-200 rounded-full h-5">
+                                <div 
+                                    className={`${FIELD_COLORS[field]} h-5 rounded-full flex items-center justify-end pr-2 text-white text-xs font-bold`}
+                                    style={{ width: `${(memberCount / maxMemberCount) * 100}%`}}
+                                >
+                                    {memberCount}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+             {/* Attendance Rate by Field */}
+            <div className="bg-gray-50 p-4 rounded-lg border">
+                 <h3 className="font-bold text-soc-navy mb-3">Attendance Rate by Field (%)</h3>
+                 <div className="space-y-2">
+                    {summaryByField.map(({ field, attendanceRate }) => (
+                        <div key={field} className="flex items-center">
+                            <span className="w-28 text-sm text-soc-gray truncate">{field}</span>
+                            <div className="flex-1 bg-gray-200 rounded-full h-5">
+                                <div 
+                                    className={`${FIELD_COLORS[field]} h-5 rounded-full flex items-center justify-end pr-2 text-white text-xs font-bold`}
+                                    style={{ width: `${attendanceRate}%`}}
+                                >
+                                    {attendanceRate.toFixed(0)}%
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const AdminDashboard: React.FC = () => {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterStatus, setFilterStatus] = useState<AttendanceStatus | ''>('');
 
-  const fetchRecords = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('attendance').select('*').order('date', { ascending: false });
-    if (error) {
-      console.error('Error fetching records:', error);
-    } else {
-      setRecords(data as AttendanceRecord[]);
-    }
+    const [attendanceRes, usersRes] = await Promise.all([
+      supabase.from('attendance').select('*').order('date', { ascending: false }),
+      supabase.from('users').select('*')
+    ]);
+    
+    if (attendanceRes.error) console.error('Error fetching records:', attendanceRes.error);
+    else setRecords(attendanceRes.data as AttendanceRecord[]);
+
+    if (usersRes.error) console.error('Error fetching users:', usersRes.error);
+    else setUsers(usersRes.data as User[]);
+
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchRecords();
-  }, [fetchRecords]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   const filteredRecords = useMemo(() => {
     return records
@@ -50,12 +144,13 @@ const AdminDashboard: React.FC = () => {
   }, [records]);
 
   const exportToCSV = () => {
-    const headers = ['ID', 'Name', 'Role', 'Date', 'Time In', 'Time Out', 'Status'];
+    const headers = ['ID', 'Name', 'Role', 'Field', 'Date', 'Time In', 'Time Out', 'Status'];
     const rows = filteredRecords.map(r => 
       [
         r.id, 
         r.full_name, 
         r.role, 
+        r.field,
         r.date, 
         r.time_in ? new Date(r.time_in).toLocaleString() : 'N/A', 
         r.time_out ? new Date(r.time_out).toLocaleString() : 'N/A',
@@ -85,6 +180,8 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg border space-y-6">
       <h2 className="text-2xl font-bold text-soc-navy">Admin Overview</h2>
+      
+      {loading ? <div className="flex justify-center p-8"><LoadingSpinner /></div> : <FieldSummary users={users} records={records} />}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -139,6 +236,7 @@ const AdminDashboard: React.FC = () => {
           <thead className="bg-gray-100">
             <tr>
               <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-soc-gray">Name</th>
+              <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-soc-gray">Field</th>
               <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-soc-gray">Date</th>
               <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-soc-gray">Time In</th>
               <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-soc-gray">Time Out</th>
@@ -149,6 +247,7 @@ const AdminDashboard: React.FC = () => {
             {filteredRecords.map(record => (
               <tr key={record.id} className="border-b hover:bg-gray-50">
                 <td className="py-3 px-4 font-medium">{record.full_name}</td>
+                <td className="py-3 px-4">{record.field && <FieldBadge field={record.field} />}</td>
                 <td className="py-3 px-4">{record.date}</td>
                 <td className="py-3 px-4">{record.time_in ? new Date(record.time_in).toLocaleTimeString() : 'N/A'}</td>
                 <td className="py-3 px-4">{record.time_out ? new Date(record.time_out).toLocaleTimeString() : 'N/A'}</td>
@@ -157,7 +256,7 @@ const AdminDashboard: React.FC = () => {
             ))}
              {filteredRecords.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="text-center py-4 text-soc-gray">No records found.</td>
+                    <td colSpan={6} className="text-center py-4 text-soc-gray">No records found.</td>
                 </tr>
             )}
           </tbody>

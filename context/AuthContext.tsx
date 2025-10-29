@@ -1,11 +1,11 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { supabase } from '../services/supabaseService';
 import { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, pass: string) => Promise<{ error: string | null }>;
+  loginAdmin: (email: string, pass: string) => Promise<{ error: string | null }>;
+  loginUser: (nisn: string, token: string) => Promise<{ error: string | null }>;
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -18,17 +18,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkUserSession = useCallback(async () => {
     try {
-      const { data: sessionData, error } = await supabase.auth.getSession();
-      if (error) throw error;
-      
-      if (sessionData.session) {
-         const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', sessionData.session.user.id)
-          .single();
-        if(userError) throw userError;
-        setUser(userData as User);
+      // This now checks our custom session in localStorage, which is simpler for this dual-auth model
+      const session = localStorage.getItem('soc_session');
+      if(session){
+        const parsedSession = JSON.parse(session);
+        // We just trust the session data for this mock app
+        setUser(parsedSession.user as User);
       } else {
         setUser(null);
       }
@@ -44,7 +39,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkUserSession();
   }, [checkUserSession]);
 
-  const login = async (email: string, pass: string) => {
+  const loginAdmin = async (email: string, pass: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
@@ -52,17 +47,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { error: error.message };
     }
     if(data.user) {
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-          
-        if(userError) {
-          setLoading(false);
-          return { error: userError.message };
-        }
-        setUser(userData as User);
+        // In this mock, signInWithPassword returns the full user object
+        setUser(data.user as User);
+    }
+    setLoading(false);
+    return { error: null };
+  };
+  
+  const loginUser = async (nisn: string, token: string) => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithNisnToken({ nisn, token });
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
+    if (data.user) {
+        setUser(data.user as User);
     }
     setLoading(false);
     return { error: null };
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, loginAdmin, loginUser, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

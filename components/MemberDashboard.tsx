@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabaseService';
-import { AttendanceRecord, AttendanceStatus } from '../types';
+import { AttendanceRecord, AttendanceStatus, Role } from '../types';
 import Modal from './Modal';
 import { LoadingSpinner } from './LoadingSpinner';
 
@@ -54,6 +53,7 @@ const MemberDashboard: React.FC = () => {
           user_id: user.id,
           full_name: user.full_name,
           role: user.role,
+          field: user.field,
           date: today,
           time_in: now,
           status: AttendanceStatus.Hadir,

@@ -1,7 +1,6 @@
-
 export enum Role {
   Admin = 'Admin',
-  Member = 'Member',
+  User = 'User',
 }
 
 export enum AttendanceStatus {
@@ -11,12 +10,30 @@ export enum AttendanceStatus {
   Pulang = 'Pulang'
 }
 
+export enum OlympiadField {
+  Mathematics = 'Mathematics',
+  Physics = 'Physics',
+  Chemistry = 'Chemistry',
+  Biology = 'Biology',
+  Informatics = 'Informatics',
+  Astronomy = 'Astronomy',
+  Economics = 'Economics',
+  EarthScience = 'Earth Science',
+  Geography = 'Geography',
+}
+
+export const OLYMPIAD_FIELDS = Object.values(OlympiadField);
+
 export interface User {
   id: string;
-  email: string;
   full_name: string;
   role: Role;
-  avatar_url?: string;
+  // Admin-specific
+  email?: string;
+  // User-specific
+  nisn?: string;
+  token?: string;
+  field?: OlympiadField;
 }
 
 export interface AttendanceRecord {
@@ -24,6 +41,7 @@ export interface AttendanceRecord {
   user_id: string;
   full_name: string;
   role: Role;
+  field: OlympiadField;
   date: string; // YYYY-MM-DD
   time_in: string | null; // ISO 8601 format
   time_out: string | null; // ISO 8601 format
