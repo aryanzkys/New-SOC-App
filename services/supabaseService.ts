@@ -79,20 +79,27 @@ const mockSupabaseClient = {
     // It doesn't create a session.
     createUser: async (userData: Partial<User>) => {
         await delay(500);
-        if (usersDB.some(u => u.nisn === userData.nisn)) {
-            return { data: null, error: { message: 'User with this NISN already exists' }};
+        if (usersDB.some(u => u.email === userData.email)) {
+            return { data: null, error: { message: 'User with this email already exists' }};
         }
         const newUser: User = {
             id: `mock_user_${Date.now()}`,
             full_name: userData.full_name || '',
+            email: userData.email || '',
             nisn: userData.nisn || '',
             token: generateToken(),
             field: userData.field || OlympiadField.Mathematics,
-            role: Role.User,
+            role: userData.role || Role.User,
         };
         usersDB.push(newUser);
         setLocalStorage('soc_users', usersDB);
-        return { data: newUser, error: null };
+        return { data: { user: newUser }, error: null };
+    },
+    deleteUser: async (userId: string) => {
+      await delay(500);
+      usersDB = usersDB.filter(u => u.id !== userId);
+      setLocalStorage('soc_users', usersDB);
+      return { error: null };
     },
   },
   from: (tableName: string) => {

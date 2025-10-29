@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminLoginPage, UserLoginPage, LoginGatePage } from './pages/LoginPage';
 import TokenCheckerPage from './pages/TokenCheckerPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminUserManagementPage from './pages/AdminUserManagementPage';
 import { LoadingSpinner } from './components/LoadingSpinner';
 
 // --- Toast Notification System ---
@@ -112,10 +113,17 @@ const AppRouter: React.FC = () => {
   }
 
   if (user) {
+    // Admin-specific routes
+    if (user.role === 'Admin') {
+      if (route === '#/admin/users') {
+        return <AdminUserManagementPage />;
+      }
+    }
+
     // If user is logged in, always show dashboard.
     // Redirect from public pages if they try to access them.
     if (route.startsWith('#/login') || route.startsWith('#/check-token')) {
-        window.location.hash = '#/';
+      window.location.hash = '#/';
     }
     return <DashboardPage />;
   }
