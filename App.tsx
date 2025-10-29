@@ -48,22 +48,11 @@ const Toast: React.FC<ToastMessage & { onDismiss: (id: number) => void }> = ({ m
   );
 };
 
-// This component now holds the state and logic for toasts.
-const ToastsManager: React.FC<{ addToast: (message: string, type: 'success' | 'error') => void; }> = ({ addToast }) => {
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const removeToast = useCallback((id: number) => {
-    setToasts(prevToasts => prevToasts.filter(toast => toast.id !== id));
-  }, []);
-  
-  // Expose a function to the parent (and globally) to add toasts
-  useEffect(() => {
-    (window as any).addToast = (message: string, type: 'success' | 'error') => {
-      const id = Date.now();
-      setToasts(prevToasts => [...prevToasts, { id, message, type }]);
-    };
-  }, []);
-
+// This component now only renders the toasts.
+const ToastsManager: React.FC<{
+  toasts: ToastMessage[];
+  removeToast: (id: number) => void;
+}> = ({ toasts, removeToast }) => {
   return (
     <div className="fixed bottom-4 right-4 z-50 space-y-2">
       {toasts.map(toast => (
@@ -73,20 +62,24 @@ const ToastsManager: React.FC<{ addToast: (message: string, type: 'success' | 'e
   );
 };
 
-
 const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const addToast = useCallback((message: string, type: 'success' | 'error') => {
-        if((window as any).addToast) {
-            (window as any).addToast(message, type);
-        }
-    }, []);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-    return (
-        <ToastContext.Provider value={{ addToast }}>
-            {children}
-            <ToastsManager addToast={addToast} />
-        </ToastContext.Provider>
-    );
+  const addToast = useCallback((message: string, type: 'success' | 'error') => {
+    const id = Date.now();
+    setToasts(prevToasts => [...prevToasts, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id: number) => {
+    setToasts(prevToasts => prevToasts.filter(toast => toast.id !== id));
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ addToast }}>
+      {children}
+      <ToastsManager toasts={toasts} removeToast={removeToast} />
+    </ToastContext.Provider>
+  );
 };
 
 
@@ -133,12 +126,12 @@ const AppRouter: React.FC = () => {
   }
 };
 
-const App: React.FC = () => {
+const App: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   return (
     <AuthProvider>
       <ToastProvider>
         <div className="min-h-screen bg-soc-white">
-          <AppRouter />
+          {children || <AppRouter />}
         </div>
       </ToastProvider>
     </AuthProvider>
